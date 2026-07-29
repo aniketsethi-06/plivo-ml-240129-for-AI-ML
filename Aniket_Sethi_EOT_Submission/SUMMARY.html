@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>End-of-Turn (EOT) Detection Summary</title>
+    <style>
+        body { font-family: Arial, sans-serif; line-height: 1.6; margin: 40px; max-width: 800px; color: #333; }
+        h1, h2 { color: #2c3e50; }
+        .metric { font-size: 1.2em; font-weight: bold; color: #27ae60; padding: 10px; background: #eafaf1; border-left: 4px solid #27ae60; margin: 20px 0; }
+        table { border-collapse: collapse; width: 100%; margin-bottom: 20px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+
+    <h1>End-of-Turn (EOT) Detection: Solution Summary</h1>
+    
+    <h2>Project Overview</h2>
+    <p>The objective of this project was to build a model from scratch capable of predicting whether a human conversational turn is over (EOT) or if the user is simply holding the floor, using only audio data preceding the pause. The model strictly adheres to the causality rule, ensuring no future audio is accessed during feature extraction.</p>
+
+    <div class="metric">
+        Final Score: 295 ms mean response delay (at 3.0% interrupted turns)
+    </div>
+
+    <h2>Why This Approach Beats the Status Quo</h2>
+    <p>The provided baseline relied entirely on silence duration, resulting in a ~1600 ms delay. Silence is an unreliable indicator because humans frequently utilize long pauses to gather their thoughts ("holds"). By shifting the paradigm from silence-duration to <strong>prosodic analysis</strong>, the model infers intent.</p>
+    <ul>
+        <li><strong>Pitch Drop (Terminal Juncture):</strong> The model uses the YIN algorithm to extract F0 and calculates the pitch slope. A trailing pitch strongly indicates an EOT.</li>
+        <li><strong>Energy Decay:</strong> By calculating the Mean and Standard Deviation of the RMS energy, the model detects the natural volume decay that occurs at the end of a statement.</li>
+    </ul>
+
+    <h2>Results</h2>
+    <p>Mean response delay at a false-cutoff rate &le;5%, comparing the given silence-only baseline against the final model:</p>
+    <svg viewBox="0 0 500 180" width="500" height="180" xmlns="http://www.w3.org/2000/svg">
+        <text x="10" y="20" font-family="Arial" font-size="13" fill="#333">Baseline (silence-only)</text>
+        <rect x="180" y="8" width="300" height="24" fill="#e74c3c" opacity="0.85"></rect>
+        <text x="490" y="25" font-family="Arial" font-size="13" fill="#333" text-anchor="end">1600 ms</text>
+
+        <text x="10" y="60" font-family="Arial" font-size="13" fill="#333">Prosodic RF model (final)</text>
+        <rect x="180" y="48" width="55.3" height="24" fill="#27ae60" opacity="0.9"></rect>
+        <text x="245" y="65" font-family="Arial" font-size="13" fill="#333">295 ms</text>
+
+        <line x1="180" y1="0" x2="180" y2="90" stroke="#999" stroke-width="1"></line>
+        <text x="10" y="110" font-family="Arial" font-size="11" fill="#777">Bar length proportional to delay (ms). Lower is better.</text>
+    </svg>
+
+    <p>Feature importances from the trained RandomForestClassifier (Gini importance):</p>
+    <svg viewBox="0 0 520 220" width="520" height="220" xmlns="http://www.w3.org/2000/svg">
+        <!-- rms_mean 0.164 -->
+        <text x="0" y="20" font-family="Arial" font-size="12" fill="#333">rms_mean</text>
+        <rect x="110" y="8" width="164" height="20" fill="#2980b9"></rect>
+        <text x="280" y="23" font-family="Arial" font-size="11" fill="#333">0.164</text>
+        <!-- rms_std 0.204 -->
+        <text x="0" y="50" font-family="Arial" font-size="12" fill="#333">rms_std</text>
+        <rect x="110" y="38" width="204" height="20" fill="#2980b9"></rect>
+        <text x="320" y="53" font-family="Arial" font-size="11" fill="#333">0.204</text>
+        <!-- f0_mean 0.161 -->
+        <text x="0" y="80" font-family="Arial" font-size="12" fill="#333">f0_mean</text>
+        <rect x="110" y="68" width="161" height="20" fill="#8e44ad"></rect>
+        <text x="277" y="83" font-family="Arial" font-size="11" fill="#333">0.161</text>
+        <!-- f0_std 0.156 -->
+        <text x="0" y="110" font-family="Arial" font-size="12" fill="#333">f0_std</text>
+        <rect x="110" y="98" width="156" height="20" fill="#8e44ad"></rect>
+        <text x="272" y="113" font-family="Arial" font-size="11" fill="#333">0.156</text>
+        <!-- f0_slope 0.177 -->
+        <text x="0" y="140" font-family="Arial" font-size="12" fill="#333">f0_slope</text>
+        <rect x="110" y="128" width="177" height="20" fill="#8e44ad"></rect>
+        <text x="293" y="143" font-family="Arial" font-size="11" fill="#333">0.177</text>
+        <!-- duration (pause_start) 0.139 -->
+        <text x="0" y="170" font-family="Arial" font-size="12" fill="#333">duration*</text>
+        <rect x="110" y="158" width="139" height="20" fill="#f39c12"></rect>
+        <text x="255" y="173" font-family="Arial" font-size="11" fill="#333">0.139</text>
+        <text x="0" y="205" font-family="Arial" font-size="10" fill="#777">*raw pause_start (position in turn) &mdash; a positional artifact, not a true prosodic cue; flagged as a generalization risk in NOTES.md.</text>
+    </svg>
+
+    <h2>Human vs. AI Collaboration Breakdown</h2>
+    <table>
+        <tr>
+            <th>Task</th>
+            <th>Primary Driver</th>
+            <th>Details</th>
+        </tr>
+        <tr>
+            <td>Strategic Direction & Feature Selection</td>
+            <td>Human</td>
+            <td>Identified prosodic features (pitch slope, RMS energy) as the optimal path over deep learning to meet the strict CPU/offline constraints and beat the silence baseline.</td>
+        </tr>
+        <tr>
+            <td>Code Generation & Pipeline Setup</td>
+            <td>AI Agent</td>
+            <td>Drafted the boilerplate for <code>librosa</code> feature extraction, instantiated the <code>RandomForestClassifier</code>, and generated the argument parsing for <code>predict.py</code>.</td>
+        </tr>
+        <tr>
+            <td>Debugging & Environment Configuration</td>
+            <td>Human + AI Agent</td>
+            <td>Collaboratively resolved nested directory pathing errors and virtual environment execution issues to ensure the grading scripts ran correctly.</td>
+        </tr>
+        <tr>
+            <td>Documentation Generation</td>
+            <td>AI Agent</td>
+            <td>Compiled the final formatting for the HTML, RUNLOG, and NOTES deliverables based on the empirical results.</td>
+        </tr>
+    </table>
+
+    <h2>Summary of Logs & Notes</h2>
+    <p>As documented in <code>RUNLOG.md</code>, moving from a heuristic silence-based approach to a Random Forest classifier analyzing a 1.5-second trailing prosodic window yielded an immediate 5x improvement in response delay. As noted in <code>NOTES.md</code>, future iterations would benefit from adding zero-crossing rate analysis to detect unvoiced consonants, mitigating edge-case failures where high-energy "thinking noises" mimic active speech.</p>
+
+</body>
+</html>
